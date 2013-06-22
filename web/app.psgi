@@ -1,5 +1,6 @@
 use strict;
 use warnings;
+use 5.10.0;
 use File::Spec;
 use File::Basename;
 use lib File::Spec->catdir(dirname(__FILE__), qw(.. exlib lib perl5));
@@ -10,8 +11,14 @@ use Amon2::Lite;
 sub load_config {
     return +{
         repository => +{
-            'hook'           => "$ENV{HOME}/project/hooks/sample.pl",
-            'android-sample' => "$ENV{HOME}/project/android-sample/hook.pl",
+            'hook'           => +{
+                command => "$ENV{HOME}/project/hooks/sample.pl",
+            },
+            'android-sample' => +{
+                command  => 'jenkins',
+                job_name => 'android-sample',
+                token    => 'tokentest',
+            },
         },
     };
 }
@@ -22,9 +29,16 @@ post '/github/:repository' => sub {
     my ($c, $p) = @_;
 
     my $repo = $p->{repository};
-    my %config = %{ $c->config->{repository} };
+    my %config = %{ $c->config->{repository}{$repo} };
 
-    system($config{$repo});
+    given ($config{command}) {
+        when ('jenkins') {
+            system('carton', 'exec', 'perl', 'script/jenkins.pl', @config{qw(job_name token)});
+        }
+        default {
+            system($_);
+        }
+    }
 
     return $c->create_response(200);
 };
